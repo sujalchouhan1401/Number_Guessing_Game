@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="A playful 3D Number Guessing Game — guess a number between 1 and 100 with higher/lower hints and fun animations!" />
+  <title>🎲 Number Guess Game</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <!-- Three.js 3D Background -->
+  <canvas id="bg-canvas"></canvas>
+
+  <!-- Game UI -->
+  <div class="game-container">
+    <div class="game-card" id="game-card">
+
+      <!-- Title -->
+      <h1 class="game-title">Number Guess</h1>
+      <p class="game-subtitle">Can you crack the secret number?</p>
+
+      <!-- Stats -->
+      <div class="stats-bar">
+        <div class="stat">
+          <span class="stat-value" id="guess-count">0</span>
+          <span class="stat-label">Guesses</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="range-min">0</span>
+          <span class="stat-label">Low</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="range-max">0</span>
+          <span class="stat-label">High</span>
+        </div>
+      </div>
+
+      <!-- Range Progress Bar -->
+      <div class="range-bar">
+        <div class="range-fill" id="range-fill" style="width: 0%"></div>
+      </div>
+
+      <!-- Hint -->
+      <div class="hint-box" id="hint-box">
+        <span class="hint-icon" id="hint-icon">🎯</span>
+        <span id="hint-text">Pick a number between 1 and 100!</span>
+      </div>
+
+      <!-- Input -->
+      <div class="input-group">
+        <input type="number" id="guess-input" class="guess-input" placeholder="Your guess..." min="1" max="100"
+          autocomplete="off" />
+        <button class="btn btn-guess" id="guess-btn">Guess!</button>
+      </div>
+
+      <!-- Restart (hidden initially) -->
+      <button class="btn btn-restart hidden" id="restart-btn">🔄 Play Again</button>
+
+      <!-- Daily Stats -->
+      <div class="daily-stats">
+        <div class="daily-stat">
+          <span class="daily-stat-icon">🏆</span>
+          <span class="daily-stat-info">
+            <span class="daily-stat-value" id="best-score">—</span>
+            <span class="daily-stat-label">Best Score</span>
+          </span>
+        </div>
+        <div class="daily-stat-divider"></div>
+        <div class="daily-stat">
+          <span class="daily-stat-icon">🎮</span>
+          <span class="daily-stat-info">
+            <span class="daily-stat-value" id="games-today">0</span>
+            <span class="daily-stat-label">Games Today</span>
+          </span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Three.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Game Script -->
+  <script src="script.js"></script>
+</body>
+
+</html>
