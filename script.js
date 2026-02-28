@@ -142,6 +142,9 @@ const rangeFill = document.getElementById('range-fill');
 const gameCard = document.getElementById('game-card');
 const bestScoreEl = document.getElementById('best-score');
 const gamesTodayEl = document.getElementById('games-today');
+const rulesBtn = document.getElementById('rules-btn');
+const rulesModal = document.getElementById('rules-modal');
+const closeRulesBtn = document.getElementById('close-rules-btn');
 
 function initGame() {
   secretNumber = Math.floor(Math.random() * 100) + 1;
@@ -359,6 +362,20 @@ guessInput.addEventListener('keydown', (e) => {
 restartBtn.addEventListener('click', () => {
   gameCard.classList.remove('pulse');
   initGame();
+});
+
+rulesBtn.addEventListener('click', () => {
+  rulesModal.classList.remove('hidden');
+});
+
+closeRulesBtn.addEventListener('click', () => {
+  rulesModal.classList.add('hidden');
+});
+
+rulesModal.addEventListener('click', (e) => {
+  if (e.target === rulesModal) {
+    rulesModal.classList.add('hidden');
+  }
 });
 
 // ==========================================

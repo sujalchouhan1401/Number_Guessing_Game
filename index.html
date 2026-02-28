@@ -19,9 +19,14 @@
   <div class="game-container">
     <div class="game-card" id="game-card">
 
-      <!-- Title -->
-      <h1 class="game-title">Number Guess</h1>
-      <p class="game-subtitle">Can you crack the secret number?</p>
+      <!-- Header -->
+      <div class="game-header">
+        <div>
+          <h1 class="game-title">Number Guess</h1>
+          <p class="game-subtitle">Can you crack the secret number?</p>
+        </div>
+        <button class="btn-icon btn-rules" id="rules-btn" title="How to Play">?</button>
+      </div>
 
       <!-- Stats -->
       <div class="stats-bar">
@@ -79,6 +84,32 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Rules Modal -->
+  <div class="modal-overlay hidden" id="rules-modal">
+    <div class="modal-content">
+      <button class="btn-close-modal" id="close-rules-btn">&times;</button>
+      <h2>How to Play</h2>
+      <ol class="rules-list">
+        <li>
+          <span class="rule-icon">🎯</span>
+          <div><strong>Objective:</strong> Guess the secret number hidden between 1 and 100.</div>
+        </li>
+        <li>
+          <span class="rule-icon">🤔</span>
+          <div><strong>Make a Guess:</strong> Enter your number in the input box and click "Guess!".</div>
+        </li>
+        <li>
+          <span class="rule-icon">📊</span>
+          <div><strong>Use Hints:</strong> The game will tell you if your guess is too high or too low. Check the range bar!</div>
+        </li>
+        <li>
+          <span class="rule-icon">🏆</span>
+          <div><strong>Win:</strong> crack the secret number in the fewest tries possible to improve your Daily Best!</div>
+        </li>
+      </ol>
     </div>
   </div>
 
