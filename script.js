@@ -402,26 +402,23 @@ function startMpGameplay(oppSecret) {
   showScreen(screenGameplay);
 }
 
-function showMpResults(p1Guesses, p2Guesses) {
+function showMpResults(myG, oppG) {
   restartBtn.classList.remove('hidden');
-
-  let myG = myRole === 'p1' ? p1Guesses : p2Guesses;
-  let oppG = myRole === 'p1' ? p2Guesses : p1Guesses;
 
   let mpMsg = "";
   if (myG < oppG) {
-    mpMsg = `You win! (${myG} vs ${oppG} guesses)`;
+    mpMsg = `Scores: You ${myG} - ${oppG} Opponent. <span style="color: var(--mint); font-weight: bold;">You won!</span>`;
     hintBox.className = 'hint-box hint-win bounce-in';
   } else if (myG > oppG) {
-    mpMsg = `You lost! (${myG} vs ${oppG} guesses)`;
+    mpMsg = `Scores: You ${myG} - ${oppG} Opponent. <span style="color: var(--pink); font-weight: bold;">You loose!</span>`;
     hintBox.className = 'hint-box hint-lower bounce-in';
   } else {
-    mpMsg = `It's a tie! Both took ${myG} guesses.`;
+    mpMsg = `Scores: You ${myG} - ${oppG} Opponent. <span style="color: var(--yellow); font-weight: bold;">It's a tie!</span>`;
     hintBox.className = 'hint-box hint-win bounce-in';
   }
 
-  hintIcon.textContent = '🏆';
-  hintText.textContent = mpMsg;
+  hintIcon.innerHTML = '🏆';
+  hintText.innerHTML = mpMsg;
 }
 
 // --- Gameplay Logic ---
