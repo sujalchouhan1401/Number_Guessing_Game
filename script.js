@@ -124,11 +124,53 @@ function animate() {
 }
 
 // ==========================================
-//  Game Logic
+//  Game Logic (CPU & Multiplayer)
 // ==========================================
 
 let secretNumber, guessCount, gameOver, low, high;
+let currentMode = 'CPU'; // 'CPU' or 'MP'
+let mpTimeLeft = 30;
+let mpTimerInterval = null;
 
+// UI Elements: Screens
+const screenMenu = document.getElementById('screen-menu');
+const screenMpLobby = document.getElementById('screen-mp-lobby');
+const screenMpWaiting = document.getElementById('screen-mp-waiting');
+const screenMpChoose = document.getElementById('screen-mp-choose');
+const screenGameplay = document.getElementById('screen-gameplay');
+const screens = [screenMenu, screenMpLobby, screenMpWaiting, screenMpChoose, screenGameplay];
+
+// UI Elements: General
+const gameCard = document.getElementById('game-card');
+const rulesBtn = document.getElementById('rules-btn');
+const rulesModal = document.getElementById('rules-modal');
+const closeRulesBtn = document.getElementById('close-rules-btn');
+
+// UI Elements: Menu
+const btnPlayCpu = document.getElementById('btn-play-cpu');
+const btnPlayFriends = document.getElementById('btn-play-friends');
+const bestScoreEls = document.querySelectorAll('.best-score-val');
+const gamesTodayEls = document.querySelectorAll('.games-today-val');
+const gameplayDailyStats = document.getElementById('gameplay-daily-stats');
+
+// UI Elements: MP Lobby & Waiting
+const btnBackMpLobby = document.getElementById('btn-back-mp-lobby');
+const btnCreateRoom = document.getElementById('btn-create-room');
+const btnJoinRoom = document.getElementById('btn-join-room');
+const roomCodeInput = document.getElementById('room-code-input');
+const displayRoomCode = document.getElementById('display-room-code');
+const btnBackMpWait = document.getElementById('btn-back-mp-wait');
+const mpMockStatus = document.getElementById('mp-mock-status');
+
+// UI Elements: MP Choose Number
+const mpChooseTimer = document.getElementById('mp-choose-timer');
+const mpSecretInput = document.getElementById('mp-secret-input');
+const btnSubmitSecret = document.getElementById('btn-submit-secret');
+
+// UI Elements: Gameplay
+const gameplayTitle = document.getElementById('gameplay-title');
+const gameplaySubtitle = document.getElementById('gameplay-subtitle');
+const btnBackGameplay = document.getElementById('btn-back-gameplay');
 const guessInput = document.getElementById('guess-input');
 const guessBtn = document.getElementById('guess-btn');
 const restartBtn = document.getElementById('restart-btn');
@@ -139,24 +181,243 @@ const guessCountEl = document.getElementById('guess-count');
 const rangeMinEl = document.getElementById('range-min');
 const rangeMaxEl = document.getElementById('range-max');
 const rangeFill = document.getElementById('range-fill');
-const gameCard = document.getElementById('game-card');
-const bestScoreEl = document.getElementById('best-score');
-const gamesTodayEl = document.getElementById('games-today');
-const rulesBtn = document.getElementById('rules-btn');
-const rulesModal = document.getElementById('rules-modal');
-const closeRulesBtn = document.getElementById('close-rules-btn');
+const gameInputGroup = document.getElementById('game-input-group');
 
-function initGame() {
-  secretNumber = Math.floor(Math.random() * 100) + 1;
+// --- Screen Navigation ---
+function showScreen(targetScreen) {
+  screens.forEach(s => s.classList.add('hidden'));
+  targetScreen.classList.remove('hidden');
+}
+
+// --- Init Application ---
+function initApp() {
+  loadDailyStats();
+  showScreen(screenMenu);
+}
+
+// --- Menu Actions ---
+btnPlayCpu.addEventListener('click', () => {
+  currentMode = 'CPU';
+  initGameplay();
+  showScreen(screenGameplay);
+});
+
+btnPlayFriends.addEventListener('click', () => {
+  currentMode = 'MP';
+  roomCodeInput.value = '';
+  showScreen(screenMpLobby);
+});
+
+btnBackMpLobby.addEventListener('click', () => showScreen(screenMenu));
+btnBackMpWait.addEventListener('click', () => showScreen(screenMpLobby));
+btnBackGameplay.addEventListener('click', () => showScreen(screenMenu));
+
+// --- Multiplayer Cross-Tab Networking via localStorage ---
+let myRole = null; // 'p1' or 'p2'
+let currentRoom = null;
+let roomCheckInterval = null;
+let gameOverProcessed = false;
+
+btnCreateRoom.addEventListener('click', () => {
+  const code = Math.random().toString(36).substring(2, 6).toUpperCase(); // 4 letters is easier to share
+  currentRoom = {
+    code: code,
+    state: 'waiting',
+    p1: { secret: null, guesses: 0, done: false },
+    p2: { joined: false, secret: null, guesses: 0, done: false }
+  };
+  localStorage.setItem('ngg_room', JSON.stringify(currentRoom));
+  myRole = 'p1';
+
+  displayRoomCode.textContent = code;
+  mpMockStatus.textContent = "Waiting for friend to join... (Open in a new tab to test!)";
+  showScreen(screenMpWaiting);
+
+  startRoomPolling();
+});
+
+btnJoinRoom.addEventListener('click', () => {
+  const codeInput = roomCodeInput.value.trim().toUpperCase();
+  const roomData = localStorage.getItem('ngg_room');
+
+  if (codeInput.length >= 4 && roomData) {
+    const room = JSON.parse(roomData);
+    if (room.code === codeInput && room.state === 'waiting') {
+      // Successful join
+      room.p2.joined = true;
+      room.state = 'choosing';
+      localStorage.setItem('ngg_room', JSON.stringify(room));
+      myRole = 'p2';
+      currentRoom = room;
+
+      displayRoomCode.textContent = codeInput;
+      mpMockStatus.textContent = "Joined! Starting...";
+      showScreen(screenMpWaiting);
+
+      startRoomPolling();
+      setTimeout(startMpChooseNumber, 1000);
+      return;
+    }
+  }
+
+  // Failed to join
+  gameCard.classList.add('shake');
+  setTimeout(() => gameCard.classList.remove('shake'), 500);
+  const oldText = btnJoinRoom.textContent;
+  btnJoinRoom.textContent = "Invalid code!";
+  setTimeout(() => btnJoinRoom.textContent = "Join", 1500);
+});
+
+function startRoomPolling() {
+  if (roomCheckInterval) clearInterval(roomCheckInterval);
+  roomCheckInterval = setInterval(pollRoom, 1000);
+}
+
+function pollRoom() {
+  const roomData = localStorage.getItem('ngg_room');
+  if (!roomData) return;
+  const room = JSON.parse(roomData);
+
+  // Wait -> Choosing (P1 sees P2 joined)
+  if (myRole === 'p1' && currentRoom.state === 'waiting' && room.state === 'choosing' && room.p2.joined) {
+    currentRoom = room;
+    mpMockStatus.textContent = "Player 2 joined! Starting...";
+    setTimeout(startMpChooseNumber, 1000);
+  }
+
+  // Choosing -> Both have secrets -> transition to 'playing'
+  if (currentRoom.state === 'choosing') {
+    if (room.p1.secret !== null && room.p2.secret !== null) {
+      room.state = 'playing';
+      if (myRole === 'p1') localStorage.setItem('ngg_room', JSON.stringify(room));
+      currentRoom = room;
+
+      const oppSecret = myRole === 'p1' ? room.p2.secret : room.p1.secret;
+      startMpGameplay(oppSecret);
+    } else {
+      currentRoom = room;
+    }
+  }
+
+  // Playing -> checking if opponent is done
+  if (currentRoom.state === 'playing') {
+    if (room.p1.done && room.p2.done && !gameOverProcessed) {
+      gameOverProcessed = true;
+      currentRoom = room;
+      showMpResults(room.p1.guesses, room.p2.guesses);
+      clearInterval(roomCheckInterval);
+    } else {
+      currentRoom = room;
+    }
+  }
+}
+
+function startMpChooseNumber() {
+  showScreen(screenMpChoose);
+  mpSecretInput.value = '';
+  mpSecretInput.disabled = false;
+  btnSubmitSecret.disabled = false;
+  btnSubmitSecret.textContent = 'Set!';
+
+  mpTimeLeft = 30;
+  mpChooseTimer.textContent = `${mpTimeLeft}s`;
+
+  clearInterval(mpTimerInterval);
+  mpTimerInterval = setInterval(() => {
+    mpTimeLeft--;
+    mpChooseTimer.textContent = `${mpTimeLeft}s`;
+
+    if (mpTimeLeft <= 0) {
+      clearInterval(mpTimerInterval);
+      // Auto submit default random if time runs out
+      if (!mpSecretInput.disabled) {
+        mpSecretInput.value = Math.floor(Math.random() * 100) + 1;
+        submitMpSecret();
+      }
+    }
+  }, 1000);
+}
+
+btnSubmitSecret.addEventListener('click', submitMpSecret);
+
+function submitMpSecret() {
+  const val = parseInt(mpSecretInput.value);
+  if (isNaN(val) || val < 1 || val > 100) {
+    gameCard.classList.add('shake');
+    setTimeout(() => gameCard.classList.remove('shake'), 500);
+    return;
+  }
+
+  // Lock input
+  mpSecretInput.disabled = true;
+  btnSubmitSecret.disabled = true;
+  clearInterval(mpTimerInterval);
+  btnSubmitSecret.textContent = 'Waiting for opponent...';
+
+  // Update local storage
+  const roomData = localStorage.getItem('ngg_room');
+  if (roomData) {
+    const room = JSON.parse(roomData);
+    if (myRole === 'p1') room.p1.secret = val;
+    if (myRole === 'p2') room.p2.secret = val;
+    localStorage.setItem('ngg_room', JSON.stringify(room));
+  }
+}
+
+function startMpGameplay(oppSecret) {
+  gameOverProcessed = false;
+  initGameplay(oppSecret);
+  gameplayTitle.textContent = "VS Friend";
+  gameplaySubtitle.textContent = myRole === 'p1' ? "Guess Player 2's number!" : "Guess Player 1's number!";
+  showScreen(screenGameplay);
+}
+
+function showMpResults(p1Guesses, p2Guesses) {
+  restartBtn.classList.remove('hidden');
+
+  let myGuesses = myRole === 'p1' ? p1Guesses : p2Guesses;
+  let oppGuesses = myRole === 'p1' ? p2Guesses : p1Guesses;
+
+  let mpMsg = "";
+  if (myGuesses < oppGuesses) {
+    mpMsg = `You win! (${myGuesses} vs ${oppGuesses} guesses)`;
+    hintBox.className = 'hint-box hint-win bounce-in';
+  } else if (myGuesses > oppGuesses) {
+    mpMsg = `You lost! (${myGuesses} vs ${oppGuesses} guesses)`;
+    hintBox.className = 'hint-box hint-lower bounce-in';
+  } else {
+    mpMsg = `It's a tie! Both took ${myGuesses} guesses.`;
+    hintBox.className = 'hint-box hint-win bounce-in';
+  }
+
+  hintIcon.textContent = '🏆';
+  hintText.textContent = mpMsg;
+}
+
+// --- Gameplay Logic ---
+function initGameplay(forcedSecret = null) {
+  gameplayTitle.textContent = "Number Guess";
+  gameplaySubtitle.textContent = "Can you crack the secret number?";
+
+  secretNumber = forcedSecret || (Math.floor(Math.random() * 100) + 1);
   guessCount = 0;
   gameOver = false;
   low = 0;
   high = 0;
 
+  gameInputGroup.classList.remove('hidden');
   guessInput.value = '';
   guessInput.disabled = false;
   guessBtn.classList.remove('hidden');
   restartBtn.classList.add('hidden');
+
+  if (currentMode === 'CPU') {
+    restartBtn.textContent = '🔄 Play Again';
+    gameplayDailyStats.classList.remove('hidden');
+  } else {
+    restartBtn.textContent = '🏠 Back to Menu';
+    gameplayDailyStats.classList.add('hidden');
+  }
 
   hintBox.className = 'hint-box';
   hintIcon.textContent = '🎯';
@@ -167,7 +428,6 @@ function initGame() {
   rangeMaxEl.textContent = '0';
   updateRangeBar();
 
-  loadDailyStats();
   guessInput.focus();
 }
 
@@ -191,11 +451,13 @@ function loadDailyStats() {
     localStorage.setItem('numberGuessStats', JSON.stringify(stats));
   }
 
-  bestScoreEl.textContent = stats.bestScore !== null ? stats.bestScore : '—';
-  gamesTodayEl.textContent = stats.gamesPlayed;
+  bestScoreEls.forEach(el => el.textContent = stats.bestScore !== null ? stats.bestScore : '—');
+  gamesTodayEls.forEach(el => el.textContent = stats.gamesPlayed);
 }
 
 function saveDailyStats(score) {
+  if (currentMode !== 'CPU') return; // Only save stats for CPU mode
+
   const today = getTodayKey();
   const raw = localStorage.getItem('numberGuessStats');
   let stats = raw ? JSON.parse(raw) : { date: today, bestScore: null, gamesPlayed: 0 };
@@ -212,18 +474,23 @@ function saveDailyStats(score) {
 
   localStorage.setItem('numberGuessStats', JSON.stringify(stats));
 
-  bestScoreEl.textContent = stats.bestScore;
-  bestScoreEl.classList.add('number-pop');
-  gamesTodayEl.textContent = stats.gamesPlayed;
-  gamesTodayEl.classList.add('number-pop');
+  bestScoreEls.forEach(el => {
+    el.textContent = stats.bestScore;
+    el.classList.add('number-pop');
+  });
+  gamesTodayEls.forEach(el => {
+    el.textContent = stats.gamesPlayed;
+    el.classList.add('number-pop');
+  });
+
   setTimeout(() => {
-    bestScoreEl.classList.remove('number-pop');
-    gamesTodayEl.classList.remove('number-pop');
+    bestScoreEls.forEach(el => el.classList.remove('number-pop'));
+    gamesTodayEls.forEach(el => el.classList.remove('number-pop'));
   }, 300);
 }
 
 function updateRangeBar() {
-  // Fill represents how narrow the range has become
+  // Keep original visual logic:
   const totalRange = 100;
   const currentRange = high - low + 1;
   const progress = ((totalRange - currentRange) / totalRange) * 100;
@@ -282,20 +549,39 @@ function makeGuess() {
   } else {
     // Correct!
     gameOver = true;
-    hintBox.className = 'hint-box hint-win bounce-in';
-    hintIcon.textContent = '🎉';
-    hintText.textContent = `Congratulations! You got it in ${guessCount} guess${guessCount > 1 ? 'es' : ''}!`;
 
+    gameInputGroup.classList.add('hidden');
     guessInput.disabled = true;
     guessBtn.classList.add('hidden');
-    restartBtn.classList.remove('hidden');
 
     gameCard.classList.add('pulse');
     rangeFill.style.width = '100%';
 
     launchConfetti();
     boostShapes();
-    saveDailyStats(guessCount);
+
+    if (currentMode === 'CPU') {
+      restartBtn.classList.remove('hidden');
+      hintBox.className = 'hint-box hint-win bounce-in';
+      hintIcon.textContent = '🎉';
+      hintText.textContent = `You got it in ${guessCount} guess${guessCount > 1 ? 'es' : ''}!`;
+      saveDailyStats(guessCount);
+    } else {
+      // Multiplayer logic - wait for opponent
+      hintBox.className = 'hint-box';
+      hintIcon.textContent = '⏳';
+      hintText.textContent = `You took ${guessCount} guesses! Waiting for opponent...`;
+
+      const roomData = localStorage.getItem('ngg_room');
+      if (roomData) {
+        const room = JSON.parse(roomData);
+        if (myRole === 'p1') { room.p1.guesses = guessCount; room.p1.done = true; }
+        if (myRole === 'p2') { room.p2.guesses = guessCount; room.p2.done = true; }
+        localStorage.setItem('ngg_room', JSON.stringify(room));
+      }
+
+      pollRoom(); // Trigger immediately just in case
+    }
   }
 
   guessInput.value = '';
@@ -361,7 +647,11 @@ guessInput.addEventListener('keydown', (e) => {
 
 restartBtn.addEventListener('click', () => {
   gameCard.classList.remove('pulse');
-  initGame();
+  if (currentMode === 'CPU') {
+    initGameplay();
+  } else {
+    showScreen(screenMenu);
+  }
 });
 
 rulesBtn.addEventListener('click', () => {
@@ -383,4 +673,4 @@ rulesModal.addEventListener('click', (e) => {
 // ==========================================
 
 initThreeScene();
-initGame();
+initApp();

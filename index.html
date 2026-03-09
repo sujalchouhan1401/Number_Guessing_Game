@@ -19,68 +19,162 @@
   <div class="game-container">
     <div class="game-card" id="game-card">
 
-      <!-- Header -->
-      <div class="game-header">
-        <div>
-          <h1 class="game-title">Number Guess</h1>
-          <p class="game-subtitle">Can you crack the secret number?</p>
+      <!-- SCREEN 1: MAIN MENU -->
+      <div id="screen-menu" class="screen">
+        <div class="game-header">
+          <div>
+            <h1 class="game-title">Number Guess</h1>
+            <p class="game-subtitle">Choose your game mode</p>
+          </div>
+          <button class="btn-icon btn-rules" id="rules-btn" title="How to Play">?</button>
         </div>
-        <button class="btn-icon btn-rules" id="rules-btn" title="How to Play">?</button>
+
+        <div class="menu-options" style="display: flex; flex-direction: column; gap: 15px; margin-top: 30px;">
+          <button class="btn btn-guess" id="btn-play-cpu">🤖 Play with CPU</button>
+          <button class="btn btn-guess" id="btn-play-friends"
+            style="background: linear-gradient(135deg, var(--sky), var(--mint));">🧑‍🤝‍🧑 Play with Friends</button>
+        </div>
+
+        <div class="daily-stats" style="margin-top: 30px;">
+          <div class="daily-stat">
+            <span class="daily-stat-icon">🏆</span>
+            <span class="daily-stat-info">
+              <span class="daily-stat-value best-score-val">—</span>
+              <span class="daily-stat-label">Best Score</span>
+            </span>
+          </div>
+          <div class="daily-stat-divider"></div>
+          <div class="daily-stat">
+            <span class="daily-stat-icon">🎮</span>
+            <span class="daily-stat-info">
+              <span class="daily-stat-value games-today-val">0</span>
+              <span class="daily-stat-label">Games Today</span>
+            </span>
+          </div>
+        </div>
       </div>
 
-      <!-- Stats -->
-      <div class="stats-bar">
-        <div class="stat">
-          <span class="stat-value" id="guess-count">0</span>
-          <span class="stat-label">Guesses</span>
+      <!-- SCREEN 2: MULTIPLAYER LOBBY -->
+      <div id="screen-mp-lobby" class="screen hidden">
+        <div class="game-header">
+          <div>
+            <h1 class="game-title">Multiplayer</h1>
+            <p class="game-subtitle">Create or Join a Room</p>
+          </div>
+          <button class="btn-icon btn-back" id="btn-back-mp-lobby" title="Back">⬅️</button>
         </div>
-        <div class="stat">
-          <span class="stat-value" id="range-min">0</span>
-          <span class="stat-label">Low</span>
-        </div>
-        <div class="stat">
-          <span class="stat-value" id="range-max">0</span>
-          <span class="stat-label">High</span>
+
+        <div class="mp-options" style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;">
+          <button class="btn btn-guess" id="btn-create-room">Create Room</button>
+          <div style="text-align: center; color: var(--text-dim); margin: 5px 0; font-weight: 600;">OR</div>
+          <div class="input-group" style="margin-bottom: 0;">
+            <input type="text" id="room-code-input" class="guess-input" placeholder="Room Code" autocomplete="off" />
+            <button class="btn btn-guess" id="btn-join-room"
+              style="background: linear-gradient(135deg, var(--sky), var(--mint)); min-width: 80px;">Join</button>
+          </div>
         </div>
       </div>
 
-      <!-- Range Progress Bar -->
-      <div class="range-bar">
-        <div class="range-fill" id="range-fill" style="width: 0%"></div>
-      </div>
-
-      <!-- Hint -->
-      <div class="hint-box" id="hint-box">
-        <span class="hint-icon" id="hint-icon">🎯</span>
-        <span id="hint-text">Pick a number between 1 and 100!</span>
-      </div>
-
-      <!-- Input -->
-      <div class="input-group">
-        <input type="number" id="guess-input" class="guess-input" placeholder="Your guess..." min="1" max="100"
-          autocomplete="off" />
-        <button class="btn btn-guess" id="guess-btn">Guess!</button>
-      </div>
-
-      <!-- Restart (hidden initially) -->
-      <button class="btn btn-restart hidden" id="restart-btn">🔄 Play Again</button>
-
-      <!-- Daily Stats -->
-      <div class="daily-stats">
-        <div class="daily-stat">
-          <span class="daily-stat-icon">🏆</span>
-          <span class="daily-stat-info">
-            <span class="daily-stat-value" id="best-score">—</span>
-            <span class="daily-stat-label">Best Score</span>
-          </span>
+      <!-- SCREEN 3: MULTIPLAYER WAITING IN ROOM -->
+      <div id="screen-mp-waiting" class="screen hidden">
+        <div class="game-header">
+          <div>
+            <h1 class="game-title">Room: <span id="display-room-code" style="color: var(--yellow);">----</span></h1>
+            <p class="game-subtitle" id="mp-wait-msg">Waiting for player 2...</p>
+          </div>
+          <button class="btn-icon btn-back" id="btn-back-mp-wait" title="Leave">⬅️</button>
         </div>
-        <div class="daily-stat-divider"></div>
-        <div class="daily-stat">
-          <span class="daily-stat-icon">🎮</span>
-          <span class="daily-stat-info">
-            <span class="daily-stat-value" id="games-today">0</span>
-            <span class="daily-stat-label">Games Today</span>
-          </span>
+        <div class="loader-container" style="margin: 40px auto; text-align: center;">
+          <div style="font-size: 3rem; animation: pulse 1s infinite;">⏳</div>
+          <p style="margin-top: 15px; color: var(--text-dim);" id="mp-mock-status">Mocking connection...</p>
+        </div>
+      </div>
+
+      <!-- SCREEN 4: MULTIPLAYER CHOOSE NUMBER (30 SECONDS) -->
+      <div id="screen-mp-choose" class="screen hidden">
+        <div class="game-header">
+          <div>
+            <h1 class="game-title">Set Number</h1>
+            <p class="game-subtitle">Time left: <span id="mp-choose-timer"
+                style="color: var(--pink); font-weight: bold; font-size: 1.1rem;">30s</span></p>
+          </div>
+        </div>
+        <div class="hint-box" style="margin-bottom: 24px;">
+          <span class="hint-icon">🤫</span>
+          <span>Pick a number (1-100) for your opponent!</span>
+        </div>
+        <div class="input-group">
+          <input type="number" id="mp-secret-input" class="guess-input" placeholder="Your secret..." min="1" max="100"
+            autocomplete="off" />
+          <button class="btn btn-guess" id="btn-submit-secret" style="min-width: 90px;">Set!</button>
+        </div>
+      </div>
+
+      <!-- SCREEN 5: GAMEPLAY (Used for both CPU and MP) -->
+      <div id="screen-gameplay" class="screen hidden">
+        <!-- Header -->
+        <div class="game-header">
+          <div>
+            <h1 class="game-title" id="gameplay-title">Number Guess</h1>
+            <p class="game-subtitle" id="gameplay-subtitle">Can you crack the secret number?</p>
+          </div>
+          <button class="btn-icon btn-back" id="btn-back-gameplay" title="Quit Game">🚪</button>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-bar">
+          <div class="stat">
+            <span class="stat-value" id="guess-count">0</span>
+            <span class="stat-label">Guesses</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="range-min">0</span>
+            <span class="stat-label">Low</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="range-max">0</span>
+            <span class="stat-label">High</span>
+          </div>
+        </div>
+
+        <!-- Range Progress Bar -->
+        <div class="range-bar">
+          <div class="range-fill" id="range-fill" style="width: 0%"></div>
+        </div>
+
+        <!-- Hint -->
+        <div class="hint-box" id="hint-box">
+          <span class="hint-icon" id="hint-icon">🎯</span>
+          <span id="hint-text">Pick a number between 1 and 100!</span>
+        </div>
+
+        <!-- Input -->
+        <div class="input-group" id="game-input-group">
+          <input type="number" id="guess-input" class="guess-input" placeholder="Your guess..." min="1" max="100"
+            autocomplete="off" />
+          <button class="btn btn-guess" id="guess-btn">Guess!</button>
+        </div>
+
+        <!-- Restart (hidden initially) -->
+        <button class="btn btn-restart hidden" id="restart-btn">🔄 Play Again</button>
+
+        <!-- Daily Stats -->
+        <div class="daily-stats" id="gameplay-daily-stats" style="margin-top: 20px;">
+          <div class="daily-stat">
+            <span class="daily-stat-icon">🏆</span>
+            <span class="daily-stat-info">
+              <span class="daily-stat-value best-score-val">—</span>
+              <span class="daily-stat-label">Best Score</span>
+            </span>
+          </div>
+          <div class="daily-stat-divider"></div>
+          <div class="daily-stat">
+            <span class="daily-stat-icon">🎮</span>
+            <span class="daily-stat-info">
+              <span class="daily-stat-value games-today-val">0</span>
+              <span class="daily-stat-label">Games Today</span>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -103,11 +197,13 @@
         </li>
         <li>
           <span class="rule-icon">📊</span>
-          <div><strong>Use Hints:</strong> The game will tell you if your guess is too high or too low. Check the range bar!</div>
+          <div><strong>Use Hints:</strong> The game will tell you if your guess is too high or too low. Check the range
+            bar!</div>
         </li>
         <li>
           <span class="rule-icon">🏆</span>
-          <div><strong>Win:</strong> crack the secret number in the fewest tries possible to improve your Daily Best!</div>
+          <div><strong>Win:</strong> crack the secret number in the fewest tries possible to improve your Daily Best!
+          </div>
         </li>
       </ol>
     </div>
