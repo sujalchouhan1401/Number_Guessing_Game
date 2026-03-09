@@ -174,6 +174,9 @@ const btnBackGameplay = document.getElementById('btn-back-gameplay');
 const guessInput = document.getElementById('guess-input');
 const guessBtn = document.getElementById('guess-btn');
 const restartBtn = document.getElementById('restart-btn');
+const mpEndActions = document.getElementById('mp-end-actions');
+const mpReplayBtn = document.getElementById('mp-replay-btn');
+const mpQuitBtn = document.getElementById('mp-quit-btn');
 const hintBox = document.getElementById('hint-box');
 const hintIcon = document.getElementById('hint-icon');
 const hintText = document.getElementById('hint-text');
@@ -229,6 +232,8 @@ let myGuesses = 0;
 let oppGuesses = 0;
 let myDone = false;
 let oppDone = false;
+let myReplayChoice = null;
+let oppReplayChoice = null;
 
 // CREATE ROOM (P1)
 btnCreateRoom.addEventListener('click', () => {
@@ -297,6 +302,7 @@ function setupConnection() {
   mySecret = null; oppSecret = null;
   myDone = false; oppDone = false;
   myGuesses = 0; oppGuesses = 0;
+  myReplayChoice = null; oppReplayChoice = null;
 
   conn.on('data', (data) => {
     if (data.type === 'join' && myRole === 'p1') {
@@ -317,6 +323,26 @@ function setupConnection() {
       oppGuesses = data.guesses;
       checkBothDone();
     }
+    else if (data.type === 'replay') {
+      oppReplayChoice = data.choice;
+      checkBothReplay();
+    }
+  });
+
+  conn.on('close', () => {
+    if (currentMode === 'MP') {
+      if (!gameOver) {
+        hintBox.className = 'hint-box hint-lower bounce-in';
+        hintIcon.textContent = '🔌';
+        hintText.textContent = 'Opponent disconnected!';
+        gameInputGroup.classList.add('hidden');
+        restartBtn.classList.remove('hidden');
+        restartBtn.textContent = '🏠 Back to Menu';
+      } else {
+        oppReplayChoice = false;
+        checkBothReplay();
+      }
+    }
   });
 }
 
@@ -333,6 +359,26 @@ function checkBothDone() {
     hintBox.className = 'hint-box';
     hintIcon.textContent = '⏳';
     hintText.textContent = `You took ${myGuesses} guesses! Waiting for opponent...`;
+  }
+}
+
+function checkBothReplay() {
+  if (myReplayChoice === true && oppReplayChoice === true) {
+    hintBox.className = 'hint-box hint-win bounce-in';
+    hintIcon.textContent = '🎮';
+    hintText.textContent = 'Starting next game...';
+    setTimeout(() => {
+      mySecret = null; oppSecret = null;
+      myDone = false; oppDone = false;
+      myGuesses = 0; oppGuesses = 0;
+      myReplayChoice = null; oppReplayChoice = null;
+      startMpChooseNumber();
+    }, 1500);
+  } else if (oppReplayChoice === false) {
+    hintBox.className = 'hint-box hint-lower bounce-in';
+    hintIcon.textContent = '👋';
+    hintText.textContent = 'Opponent declined to play again.';
+    if (mpReplayBtn) mpReplayBtn.style.display = 'none';
   }
 }
 
@@ -403,7 +449,9 @@ function startMpGameplay(oppSecret) {
 }
 
 function showMpResults(myG, oppG) {
-  restartBtn.classList.remove('hidden');
+  if (mpEndActions) {
+    mpEndActions.classList.remove('hidden');
+  }
 
   let mpMsg = "";
   if (myG < oppG) {
@@ -437,6 +485,13 @@ function initGameplay(forcedSecret = null) {
   guessInput.disabled = false;
   guessBtn.classList.remove('hidden');
   restartBtn.classList.add('hidden');
+  if (mpEndActions) mpEndActions.classList.add('hidden');
+  if (mpReplayBtn) {
+    mpReplayBtn.disabled = false;
+    mpReplayBtn.style.display = 'block';
+    mpReplayBtn.textContent = '🔄 Replay';
+  }
+  if (mpQuitBtn) mpQuitBtn.disabled = false;
 
   if (currentMode === 'CPU') {
     restartBtn.textContent = '🔄 Play Again';
@@ -675,9 +730,34 @@ restartBtn.addEventListener('click', () => {
   if (currentMode === 'CPU') {
     initGameplay();
   } else {
+    cleanupMP();
     showScreen(screenMenu);
   }
 });
+
+if (mpReplayBtn) {
+  mpReplayBtn.addEventListener('click', () => {
+    myReplayChoice = true;
+    mpReplayBtn.disabled = true;
+    mpReplayBtn.textContent = 'Waiting...';
+    if (conn && conn.open) conn.send({ type: 'replay', choice: true });
+    if (oppReplayChoice === null) {
+      hintBox.className = 'hint-box';
+      hintIcon.textContent = '⏳';
+      hintText.textContent = 'Waiting for opponent...';
+    }
+    checkBothReplay();
+  });
+}
+
+if (mpQuitBtn) {
+  mpQuitBtn.addEventListener('click', () => {
+    myReplayChoice = false;
+    if (conn && conn.open) conn.send({ type: 'replay', choice: false });
+    cleanupMP();
+    showScreen(screenMenu);
+  });
+}
 
 rulesBtn.addEventListener('click', () => {
   rulesModal.classList.remove('hidden');
