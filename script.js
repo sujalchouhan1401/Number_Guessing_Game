@@ -208,109 +208,143 @@ btnPlayFriends.addEventListener('click', () => {
   showScreen(screenMpLobby);
 });
 
-btnBackMpLobby.addEventListener('click', () => showScreen(screenMenu));
-btnBackMpWait.addEventListener('click', () => showScreen(screenMpLobby));
-btnBackGameplay.addEventListener('click', () => showScreen(screenMenu));
+function cleanupMP() {
+  if (conn) { conn.close(); conn = null; }
+  if (peer) { peer.destroy(); peer = null; }
+}
 
-// --- Multiplayer Cross-Tab Networking via localStorage ---
+btnBackMpLobby.addEventListener('click', () => { cleanupMP(); showScreen(screenMenu); });
+btnBackMpWait.addEventListener('click', () => { cleanupMP(); showScreen(screenMpLobby); });
+btnBackGameplay.addEventListener('click', () => { cleanupMP(); showScreen(screenMenu); });
+
+// --- Multiplayer WebRTC Networking via PeerJS ---
 let myRole = null; // 'p1' or 'p2'
-let currentRoom = null;
-let roomCheckInterval = null;
-let gameOverProcessed = false;
+let currentRoomCode = null;
+let peer = null;
+let conn = null;
 
+let mySecret = null;
+let oppSecret = null;
+let myGuesses = 0;
+let oppGuesses = 0;
+let myDone = false;
+let oppDone = false;
+
+// CREATE ROOM (P1)
 btnCreateRoom.addEventListener('click', () => {
-  const code = Math.random().toString(36).substring(2, 6).toUpperCase(); // 4 letters is easier to share
-  currentRoom = {
-    code: code,
-    state: 'waiting',
-    p1: { secret: null, guesses: 0, done: false },
-    p2: { joined: false, secret: null, guesses: 0, done: false }
-  };
-  localStorage.setItem('ngg_room', JSON.stringify(currentRoom));
+  const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+  currentRoomCode = code;
   myRole = 'p1';
 
   displayRoomCode.textContent = code;
-  mpMockStatus.textContent = "Waiting for friend to join... (Open in a new tab to test!)";
+  mpMockStatus.textContent = "Connecting to server...";
   showScreen(screenMpWaiting);
 
-  startRoomPolling();
+  peer = new Peer('ngg-room-' + code);
+
+  peer.on('open', (id) => {
+    mpMockStatus.textContent = "Waiting for friend to join...";
+  });
+
+  peer.on('connection', (c) => {
+    conn = c;
+    setupConnection();
+  });
+
+  peer.on('error', (err) => {
+    mpMockStatus.textContent = "Error: " + err.type;
+  });
 });
 
+// JOIN ROOM (P2)
 btnJoinRoom.addEventListener('click', () => {
   const codeInput = roomCodeInput.value.trim().toUpperCase();
-  const roomData = localStorage.getItem('ngg_room');
-
-  if (codeInput.length >= 4 && roomData) {
-    const room = JSON.parse(roomData);
-    if (room.code === codeInput && room.state === 'waiting') {
-      // Successful join
-      room.p2.joined = true;
-      room.state = 'choosing';
-      localStorage.setItem('ngg_room', JSON.stringify(room));
-      myRole = 'p2';
-      currentRoom = room;
-
-      displayRoomCode.textContent = codeInput;
-      mpMockStatus.textContent = "Joined! Starting...";
-      showScreen(screenMpWaiting);
-
-      startRoomPolling();
-      setTimeout(startMpChooseNumber, 1000);
-      return;
-    }
+  if (codeInput.length < 4) {
+    gameCard.classList.add('shake');
+    setTimeout(() => gameCard.classList.remove('shake'), 500);
+    return;
   }
 
-  // Failed to join
-  gameCard.classList.add('shake');
-  setTimeout(() => gameCard.classList.remove('shake'), 500);
-  const oldText = btnJoinRoom.textContent;
-  btnJoinRoom.textContent = "Invalid code!";
-  setTimeout(() => btnJoinRoom.textContent = "Join", 1500);
+  currentRoomCode = codeInput;
+  myRole = 'p2';
+  displayRoomCode.textContent = codeInput;
+  mpMockStatus.textContent = "Connecting to server...";
+  showScreen(screenMpWaiting);
+
+  peer = new Peer();
+
+  peer.on('open', () => {
+    mpMockStatus.textContent = "Joining room...";
+    conn = peer.connect('ngg-room-' + codeInput);
+
+    conn.on('open', () => {
+      setupConnection();
+      conn.send({ type: 'join' }); // Tell P1 we joined
+    });
+
+    conn.on('error', (err) => {
+      mpMockStatus.textContent = "Connection failed!";
+    });
+  });
+
+  peer.on('error', (err) => {
+    mpMockStatus.textContent = "Error! Room may not exist.";
+  });
 });
 
-function startRoomPolling() {
-  if (roomCheckInterval) clearInterval(roomCheckInterval);
-  roomCheckInterval = setInterval(pollRoom, 1000);
+// Handle RTC Connection
+function setupConnection() {
+  mySecret = null; oppSecret = null;
+  myDone = false; oppDone = false;
+  myGuesses = 0; oppGuesses = 0;
+
+  conn.on('data', (data) => {
+    if (data.type === 'join' && myRole === 'p1') {
+      mpMockStatus.textContent = "Player 2 joined! Starting...";
+      conn.send({ type: 'start_choose' });
+      setTimeout(startMpChooseNumber, 1500);
+    }
+    else if (data.type === 'start_choose' && myRole === 'p2') {
+      mpMockStatus.textContent = "Joined! Starting...";
+      setTimeout(startMpChooseNumber, 1500);
+    }
+    else if (data.type === 'secret') {
+      oppSecret = data.val;
+      checkBothSecrets();
+    }
+    else if (data.type === 'done') {
+      oppDone = true;
+      oppGuesses = data.guesses;
+      checkBothDone();
+    }
+  });
 }
 
-function pollRoom() {
-  const roomData = localStorage.getItem('ngg_room');
-  if (!roomData) return;
-  const room = JSON.parse(roomData);
-
-  // Wait -> Choosing (P1 sees P2 joined)
-  if (myRole === 'p1' && currentRoom.state === 'waiting' && room.state === 'choosing' && room.p2.joined) {
-    currentRoom = room;
-    mpMockStatus.textContent = "Player 2 joined! Starting...";
-    setTimeout(startMpChooseNumber, 1000);
-  }
-
-  // Choosing -> Both have secrets -> transition to 'playing'
-  if (currentRoom.state === 'choosing') {
-    if (room.p1.secret !== null && room.p2.secret !== null) {
-      room.state = 'playing';
-      if (myRole === 'p1') localStorage.setItem('ngg_room', JSON.stringify(room));
-      currentRoom = room;
-
-      const oppSecret = myRole === 'p1' ? room.p2.secret : room.p1.secret;
-      startMpGameplay(oppSecret);
-    } else {
-      currentRoom = room;
-    }
-  }
-
-  // Playing -> checking if opponent is done
-  if (currentRoom.state === 'playing') {
-    if (room.p1.done && room.p2.done && !gameOverProcessed) {
-      gameOverProcessed = true;
-      currentRoom = room;
-      showMpResults(room.p1.guesses, room.p2.guesses);
-      clearInterval(roomCheckInterval);
-    } else {
-      currentRoom = room;
-    }
+function checkBothSecrets() {
+  if (mySecret !== null && oppSecret !== null) {
+    startMpGameplay(oppSecret);
   }
 }
+
+function checkBothDone() {
+  if (myDone && oppDone) {
+    showMpResults(myGuesses, oppGuesses);
+  } else if (myDone && !oppDone) {
+    hintBox.className = 'hint-box';
+    hintIcon.textContent = '⏳';
+    hintText.textContent = `You took ${myGuesses} guesses! Waiting for opponent...`;
+  }
+}
+
+// UI Copy Action
+document.getElementById('btn-copy-code').addEventListener('click', () => {
+  if (currentRoomCode) {
+    navigator.clipboard.writeText(currentRoomCode);
+    const btn = document.getElementById('btn-copy-code');
+    btn.textContent = '✅';
+    setTimeout(() => btn.textContent = '📋', 1500);
+  }
+});
 
 function startMpChooseNumber() {
   showScreen(screenMpChoose);
@@ -347,25 +381,21 @@ function submitMpSecret() {
     setTimeout(() => gameCard.classList.remove('shake'), 500);
     return;
   }
-
   // Lock input
   mpSecretInput.disabled = true;
   btnSubmitSecret.disabled = true;
   clearInterval(mpTimerInterval);
   btnSubmitSecret.textContent = 'Waiting for opponent...';
 
-  // Update local storage
-  const roomData = localStorage.getItem('ngg_room');
-  if (roomData) {
-    const room = JSON.parse(roomData);
-    if (myRole === 'p1') room.p1.secret = val;
-    if (myRole === 'p2') room.p2.secret = val;
-    localStorage.setItem('ngg_room', JSON.stringify(room));
+  // Send to peer
+  mySecret = val;
+  if (conn && conn.open) {
+    conn.send({ type: 'secret', val: val });
   }
+  checkBothSecrets();
 }
 
 function startMpGameplay(oppSecret) {
-  gameOverProcessed = false;
   initGameplay(oppSecret);
   gameplayTitle.textContent = "VS Friend";
   gameplaySubtitle.textContent = myRole === 'p1' ? "Guess Player 2's number!" : "Guess Player 1's number!";
@@ -375,18 +405,18 @@ function startMpGameplay(oppSecret) {
 function showMpResults(p1Guesses, p2Guesses) {
   restartBtn.classList.remove('hidden');
 
-  let myGuesses = myRole === 'p1' ? p1Guesses : p2Guesses;
-  let oppGuesses = myRole === 'p1' ? p2Guesses : p1Guesses;
+  let myG = myRole === 'p1' ? p1Guesses : p2Guesses;
+  let oppG = myRole === 'p1' ? p2Guesses : p1Guesses;
 
   let mpMsg = "";
-  if (myGuesses < oppGuesses) {
-    mpMsg = `You win! (${myGuesses} vs ${oppGuesses} guesses)`;
+  if (myG < oppG) {
+    mpMsg = `You win! (${myG} vs ${oppG} guesses)`;
     hintBox.className = 'hint-box hint-win bounce-in';
-  } else if (myGuesses > oppGuesses) {
-    mpMsg = `You lost! (${myGuesses} vs ${oppGuesses} guesses)`;
+  } else if (myG > oppG) {
+    mpMsg = `You lost! (${myG} vs ${oppG} guesses)`;
     hintBox.className = 'hint-box hint-lower bounce-in';
   } else {
-    mpMsg = `It's a tie! Both took ${myGuesses} guesses.`;
+    mpMsg = `It's a tie! Both took ${myG} guesses.`;
     hintBox.className = 'hint-box hint-win bounce-in';
   }
 
@@ -572,15 +602,13 @@ function makeGuess() {
       hintIcon.textContent = '⏳';
       hintText.textContent = `You took ${guessCount} guesses! Waiting for opponent...`;
 
-      const roomData = localStorage.getItem('ngg_room');
-      if (roomData) {
-        const room = JSON.parse(roomData);
-        if (myRole === 'p1') { room.p1.guesses = guessCount; room.p1.done = true; }
-        if (myRole === 'p2') { room.p2.guesses = guessCount; room.p2.done = true; }
-        localStorage.setItem('ngg_room', JSON.stringify(room));
+      myDone = true;
+      myGuesses = guessCount;
+      if (conn && conn.open) {
+        conn.send({ type: 'done', guesses: guessCount });
       }
 
-      pollRoom(); // Trigger immediately just in case
+      checkBothDone();
     }
   }
 
