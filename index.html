@@ -54,6 +54,23 @@
         </div>
       </div>
 
+      <!-- SCREEN 1.5: CHOOSE RANGE -->
+      <div id="screen-range" class="screen hidden">
+        <div class="game-header">
+          <div>
+            <h1 class="game-title">Select Range</h1>
+            <p class="game-subtitle">How high should we go?</p>
+          </div>
+          <button class="btn-icon btn-back" id="btn-back-range" title="Back">⬅️</button>
+        </div>
+
+        <div class="menu-options" style="display: flex; flex-direction: column; gap: 15px; margin-top: 30px;">
+          <button class="btn btn-guess" id="btn-range-100">1 - 100</button>
+          <button class="btn btn-guess" id="btn-range-1000"
+            style="background: linear-gradient(135deg, var(--sky), var(--mint));">1 - 1000</button>
+        </div>
+      </div>
+
       <!-- SCREEN 2: MULTIPLAYER LOBBY -->
       <div id="screen-mp-lobby" class="screen hidden">
         <div class="game-header">
@@ -105,7 +122,7 @@
         </div>
         <div class="hint-box" style="margin-bottom: 24px;">
           <span class="hint-icon">🤫</span>
-          <span>Pick a number (1-100) for your opponent!</span>
+          <span id="mp-choose-hint">Pick a number (1-100) for your opponent!</span>
         </div>
         <div class="input-group">
           <input type="number" id="mp-secret-input" class="guess-input" placeholder="Your secret..." min="1" max="100"
@@ -200,7 +217,7 @@
       <ol class="rules-list">
         <li>
           <span class="rule-icon">🎯</span>
-          <div><strong>Objective:</strong> Guess the secret number hidden between 1 and 100.</div>
+          <div><strong>Objective:</strong> Guess the secret number hidden between 1 and the chosen max (100 or 1000).</div>
         </li>
         <li>
           <span class="rule-icon">🤔</span>

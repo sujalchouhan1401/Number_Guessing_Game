@@ -129,16 +129,23 @@ function animate() {
 
 let secretNumber, guessCount, gameOver, low, high;
 let currentMode = 'CPU'; // 'CPU' or 'MP'
+let maxRange = 100;
+let pendingAction = null;
 let mpTimeLeft = 30;
 let mpTimerInterval = null;
 
 // UI Elements: Screens
 const screenMenu = document.getElementById('screen-menu');
+const screenRange = document.getElementById('screen-range');
 const screenMpLobby = document.getElementById('screen-mp-lobby');
 const screenMpWaiting = document.getElementById('screen-mp-waiting');
 const screenMpChoose = document.getElementById('screen-mp-choose');
 const screenGameplay = document.getElementById('screen-gameplay');
-const screens = [screenMenu, screenMpLobby, screenMpWaiting, screenMpChoose, screenGameplay];
+const screens = [screenMenu, screenRange, screenMpLobby, screenMpWaiting, screenMpChoose, screenGameplay];
+
+const btnRange100 = document.getElementById('btn-range-100');
+const btnRange1000 = document.getElementById('btn-range-1000');
+const btnBackRange = document.getElementById('btn-back-range');
 
 // UI Elements: General
 const gameCard = document.getElementById('game-card');
@@ -166,6 +173,7 @@ const mpMockStatus = document.getElementById('mp-mock-status');
 const mpChooseTimer = document.getElementById('mp-choose-timer');
 const mpSecretInput = document.getElementById('mp-secret-input');
 const btnSubmitSecret = document.getElementById('btn-submit-secret');
+const mpChooseHint = document.getElementById('mp-choose-hint');
 
 // UI Elements: Gameplay
 const gameplayTitle = document.getElementById('gameplay-title');
@@ -201,8 +209,29 @@ function initApp() {
 // --- Menu Actions ---
 btnPlayCpu.addEventListener('click', () => {
   currentMode = 'CPU';
-  initGameplay();
-  showScreen(screenGameplay);
+  pendingAction = 'CPU';
+  showScreen(screenRange);
+});
+
+btnRange100.addEventListener('click', () => selectRange(100));
+btnRange1000.addEventListener('click', () => selectRange(1000));
+
+function selectRange(range) {
+  maxRange = range;
+  if (pendingAction === 'CPU') {
+    initGameplay();
+    showScreen(screenGameplay);
+  } else if (pendingAction === 'MP_CREATE') {
+    startRoomCreation();
+  }
+}
+
+btnBackRange.addEventListener('click', () => {
+  if (pendingAction === 'CPU') {
+    showScreen(screenMenu);
+  } else if (pendingAction === 'MP_CREATE') {
+    showScreen(screenMpLobby);
+  }
 });
 
 btnPlayFriends.addEventListener('click', () => {
@@ -237,6 +266,11 @@ let oppReplayChoice = null;
 
 // CREATE ROOM (P1)
 btnCreateRoom.addEventListener('click', () => {
+  pendingAction = 'MP_CREATE';
+  showScreen(screenRange);
+});
+
+function startRoomCreation() {
   const code = Math.random().toString(36).substring(2, 6).toUpperCase();
   currentRoomCode = code;
   myRole = 'p1';
@@ -259,7 +293,7 @@ btnCreateRoom.addEventListener('click', () => {
   peer.on('error', (err) => {
     mpMockStatus.textContent = "Error: " + err.type;
   });
-});
+}
 
 // JOIN ROOM (P2)
 btnJoinRoom.addEventListener('click', () => {
@@ -307,10 +341,11 @@ function setupConnection() {
   conn.on('data', (data) => {
     if (data.type === 'join' && myRole === 'p1') {
       mpMockStatus.textContent = "Player 2 joined! Starting...";
-      conn.send({ type: 'start_choose' });
+      conn.send({ type: 'start_choose', maxRange: maxRange });
       setTimeout(startMpChooseNumber, 1500);
     }
     else if (data.type === 'start_choose' && myRole === 'p2') {
+      maxRange = data.maxRange || 100;
       mpMockStatus.textContent = "Joined! Starting...";
       setTimeout(startMpChooseNumber, 1500);
     }
@@ -396,6 +431,8 @@ function startMpChooseNumber() {
   showScreen(screenMpChoose);
   mpSecretInput.value = '';
   mpSecretInput.disabled = false;
+  mpSecretInput.max = maxRange;
+  mpChooseHint.textContent = `Pick a number (1-${maxRange}) for your opponent!`;
   btnSubmitSecret.disabled = false;
   btnSubmitSecret.textContent = 'Set!';
 
@@ -411,7 +448,7 @@ function startMpChooseNumber() {
       clearInterval(mpTimerInterval);
       // Auto submit default random if time runs out
       if (!mpSecretInput.disabled) {
-        mpSecretInput.value = Math.floor(Math.random() * 100) + 1;
+        mpSecretInput.value = Math.floor(Math.random() * maxRange) + 1;
         submitMpSecret();
       }
     }
@@ -422,7 +459,7 @@ btnSubmitSecret.addEventListener('click', submitMpSecret);
 
 function submitMpSecret() {
   const val = parseInt(mpSecretInput.value);
-  if (isNaN(val) || val < 1 || val > 100) {
+  if (isNaN(val) || val < 1 || val > maxRange) {
     gameCard.classList.add('shake');
     setTimeout(() => gameCard.classList.remove('shake'), 500);
     return;
@@ -474,7 +511,7 @@ function initGameplay(forcedSecret = null) {
   gameplayTitle.textContent = "Number Guess";
   gameplaySubtitle.textContent = "Can you crack the secret number?";
 
-  secretNumber = forcedSecret || (Math.floor(Math.random() * 100) + 1);
+  secretNumber = forcedSecret || (Math.floor(Math.random() * maxRange) + 1);
   guessCount = 0;
   gameOver = false;
   low = 0;
@@ -503,7 +540,8 @@ function initGameplay(forcedSecret = null) {
 
   hintBox.className = 'hint-box';
   hintIcon.textContent = '🎯';
-  hintText.textContent = 'Pick a number between 1 and 100!';
+  hintText.textContent = `Pick a number between 1 and ${maxRange}!`;
+  guessInput.max = maxRange;
 
   guessCountEl.textContent = '0';
   rangeMinEl.textContent = '0';
@@ -573,7 +611,7 @@ function saveDailyStats(score) {
 
 function updateRangeBar() {
   // Keep original visual logic:
-  const totalRange = 100;
+  const totalRange = maxRange;
   const currentRange = high - low + 1;
   const progress = ((totalRange - currentRange) / totalRange) * 100;
   rangeFill.style.width = progress + '%';
@@ -583,13 +621,13 @@ function makeGuess() {
   if (gameOver) return;
 
   const value = parseInt(guessInput.value);
-  if (isNaN(value) || value < 1 || value > 100) {
+  if (isNaN(value) || value < 1 || value > maxRange) {
     // Shake for invalid input
     gameCard.classList.add('shake');
     setTimeout(() => gameCard.classList.remove('shake'), 500);
     hintBox.className = 'hint-box';
     hintIcon.textContent = '⚠️';
-    hintText.textContent = 'Enter a valid number (1–100)!';
+    hintText.textContent = `Enter a valid number (1–${maxRange})!`;
     return;
   }
 
